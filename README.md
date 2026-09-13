@@ -89,6 +89,16 @@ call sites that legitimately run both ways:
 Rails.supervisor.restart!(:jobs) if Rails.supervisor.supervised?
 ```
 
+**Runbook note — where to call it from.** Remediation calls must originate
+*inside* the supervision tree: only children spawned by the supervisor inherit
+`OTP_RAILS_SOCK` / `OTP_RAILS_TOKEN`. A `bin/rails runner` one-liner, a cron
+job, or a console started outside the tree raises `Unsupervised` **by
+design** — it has no socket and no per-boot token, so it cannot authenticate.
+The reference pattern (used by the integration harness) is to route the
+remediation through the web child, e.g. an ops-only controller action that
+calls `Rails.supervisor.restart!(:jobs)` — the web process is itself a
+supervised child, so the env is present and the token is current.
+
 ## 3. Circuit breakers
 
 A minimal breaker — consecutive-failure counting, three states, no sliding
@@ -96,6 +106,13 @@ windows — with **fail-open storage** (DESIGN §7, Faulty's rule): if the
 breaker's own bookkeeping ever fails, circuits **open** (raise fast) rather
 than the app hanging behind a broken breaker. Storage is retried after
 `cool_off`, so a healed backend closes things again.
+
+Half-open is **single-flight**: after `cool_off`, exactly one caller runs the
+trial call; concurrent callers keep getting `OpenError` until the trial
+resolves (success closes, failure re-opens) — a recovering resource is never
+stampeded. Failure counting is *consecutive*: any success resets the count, so
+a partial failure rate under mixed traffic will not open the circuit. Both are
+deliberate v0.1 semantics.
 
 ### Wrapper API
 
@@ -158,7 +175,11 @@ DESIGN §7: "boot must be idempotent". The task boots your app once (normal
 2. tracked class-level state changed between runs:
    - `ActiveSupport::Notifications` subscriber count (an unguarded
      `subscribe` doubles on re-run — the classic double-boot bug)
-   - middleware stack operation count (an unguarded `middleware.use`)
+
+An unguarded `config.middleware.use` is caught through path 1 on modern
+Rails: the middleware stack is frozen once built, so re-running the
+initializer raises `FrozenError` — reported as "raised on second run", not as
+a counted dimension.
 
 Everything happens in the fork; the parent process is never polluted. Exit
 status is non-zero on failure, so it slots into CI as-is.
@@ -168,8 +189,11 @@ status is non-zero on failure, so it slots into CI as-is.
 - non-idempotence in the framework/railtie initializer chain — only your app's
   `config/initializers` are re-run (the framework chain is not re-entrant by
   design; see `docs/OPEN_QUESTIONS.md` #2)
-- state outside the two tracked dimensions: memoized globals, constants,
-  spawned threads/timers, `at_exit` hooks, file or database writes
+- state outside the tracked subscriber-count dimension: memoized globals,
+  constants, spawned threads/timers, `at_exit` hooks, file or database writes
+- unguarded `middleware.use`, IF a future Rails stops freezing the built
+  middleware stack (today the frozen-stack `FrozenError` catches it; there is
+  no drift dimension backing that up)
 - non-idempotence in `application.rb`, environment files, or engine
   initializers
 - order-dependence between initializers (files are re-run in the same sorted

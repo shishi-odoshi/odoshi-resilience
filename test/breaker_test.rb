@@ -67,6 +67,68 @@ class BreakerTest < Minitest::Test
     assert_equal :open, b.state
   end
 
+  # Regression for issue #2: half-open is single-flight — exactly one caller
+  # runs the trial; concurrent callers fail fast with OpenError until it
+  # resolves.
+  def test_half_open_admits_exactly_one_concurrent_trial
+    b = breaker(cool_off: 0.2)
+    trip(b, 3)
+    sleep 0.35
+    assert_equal :half_open, b.state
+
+    entered = 0
+    entered_mutex = Mutex.new
+    open_errors = 0
+    open_mutex = Mutex.new
+    latch = Queue.new
+
+    threads = Array.new(30) do
+      Thread.new do
+        latch.pop # all threads released together
+        begin
+          b.call do
+            entered_mutex.synchronize { entered += 1 }
+            sleep 2.0 # keep the trial in flight while every other thread attempts
+            :ok
+          end
+        rescue OtpRails::Resilience::Breaker::OpenError
+          open_mutex.synchronize { open_errors += 1 }
+        end
+      end
+    end
+
+    30.times { latch << true }
+    threads.each { |t| t.join(15) }
+
+    assert_equal 1, entered, "exactly one caller runs the half-open trial"
+    assert_equal 29, open_errors, "concurrent callers fail fast during the trial"
+    assert_equal :closed, b.state, "the successful trial closed the circuit"
+    assert_equal :ok, b.call { :ok }
+  end
+
+  def test_failed_trial_releases_the_slot_for_the_next_trial_after_cool_off
+    b = breaker(cool_off: 0.2)
+    trip(b, 3)
+    sleep 0.35
+    assert_raises(Boom) { b.call { raise Boom } } # trial fails -> re-open
+    assert_equal :open, b.state
+
+    sleep 0.35 # cool_off again
+    assert_equal :half_open, b.state
+    assert_equal :ok, b.call { :ok }, "the slot was released; a new trial is admitted"
+    assert_equal :closed, b.state
+  end
+
+  def test_unexpected_error_during_trial_still_releases_the_slot
+    b = breaker(cool_off: 0.2)
+    trip(b, 3)
+    sleep 0.35
+    assert_raises(Other) { b.call { raise Other } } # unexpected: not counted
+    assert_equal :half_open, b.state, "unexpected error neither closes nor re-opens"
+    assert_equal :ok, b.call { :ok }, "the slot was released by ensure"
+    assert_equal :closed, b.state
+  end
+
   # -- fail-open storage semantics (DESIGN section 7) ------------------------
 
   class BrokenStorage

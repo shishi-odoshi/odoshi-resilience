@@ -14,7 +14,11 @@ module OtpRails
     #   2. tracked class-level state changed between the runs:
     #        - ActiveSupport::Notifications subscriber count (an unguarded
     #          subscribe doubles on re-run — the classic double-boot bug)
-    #        - middleware stack operation count (unguarded middleware.use)
+    #
+    # Unguarded `config.middleware.use` is caught by path 1 on modern Rails:
+    # the middleware stack is frozen once built, so the re-run raises
+    # FrozenError. (A counted middleware dimension existed in early 0.1 but
+    # always read 0/0 post-boot — vestigial, removed; see issue #3.)
     #
     # Scope (documented in the README): only the application's own
     # config/initializers/*.rb are re-run — not the framework/railtie
@@ -89,10 +93,9 @@ module OtpRails
         # Tracked dimensions. Each returns nil (=> skipped, reported as
         # untracked) when the internals it reads are not available in this
         # Rails version.
-        def fingerprint(app)
+        def fingerprint(_app)
           {
-            "notification_subscribers" => notification_subscriber_count,
-            "middleware_operations" => middleware_operation_count(app)
+            "notification_subscribers" => notification_subscriber_count
           }
         end
 
@@ -104,19 +107,6 @@ module OtpRails
           strings = notifier.instance_variable_get(:@string_subscribers)
           others = notifier.instance_variable_get(:@other_subscribers)
           strings.values.sum(&:size) + others.size
-        rescue StandardError
-          nil
-        end
-
-        def middleware_operation_count(app)
-          proxy = app.config.middleware
-          count = 0
-          %i[@operations @delete_operations].each do |ivar|
-            next unless proxy.instance_variable_defined?(ivar)
-
-            count += Array(proxy.instance_variable_get(ivar)).size
-          end
-          count
         rescue StandardError
           nil
         end
