@@ -7,8 +7,11 @@ module OtpRails
     #
     #   closed    — calls pass through; expected errors count as failures.
     #   open      — calls raise Breaker::OpenError immediately (fail fast).
-    #   half_open — after cool_off seconds open, trial calls are allowed;
-    #               one success closes the circuit, a failure re-opens it.
+    #   half_open — after cool_off seconds open, exactly ONE trial call is
+    #               admitted at a time (single-flight); concurrent callers get
+    #               OpenError until the trial resolves. A trial success closes
+    #               the circuit, a trial failure re-opens it. No thundering
+    #               herd on a recovering resource.
     #
     # FAIL-OPEN STORAGE (Faulty's rule, DESIGN §7): if the breaker's own
     # bookkeeping raises — the storage backend is broken — the circuit OPENS
@@ -56,6 +59,8 @@ module OtpRails
         @storage = storage
         @storage_failed_at = nil
         @mutex = Mutex.new
+        @trial_mutex = Mutex.new
+        @trial_in_flight = false
       end
 
       # count_success: false makes the call fail-fast/fail-count only — an
@@ -68,14 +73,21 @@ module OtpRails
         current = state
         raise OpenError, @name if current == :open
 
+        # Single-flight half-open: exactly one caller runs the trial; everyone
+        # else fails fast until it resolves.
+        trial = current == :half_open
+        acquire_trial! if trial
+
         begin
           result = yield
+          record_success if count_success
+          result
         rescue Exception => e # rubocop:disable Lint/RescueException — re-raised below
-          record_failure(reopen: current == :half_open) if expected?(e)
+          record_failure(reopen: trial) if expected?(e)
           raise
+        ensure
+          release_trial! if trial
         end
-        record_success if count_success
-        result
       end
 
       # :closed | :open | :half_open. Storage failure => :open (fail-open),
@@ -106,6 +118,19 @@ module OtpRails
       end
 
       private
+
+      def acquire_trial!
+        acquired = @trial_mutex.synchronize do
+          @trial_in_flight ? false : (@trial_in_flight = true)
+        end
+        return if acquired
+
+        raise OpenError.new(@name, "circuit #{@name} is half-open with a trial call in flight")
+      end
+
+      def release_trial!
+        @trial_mutex.synchronize { @trial_in_flight = false }
+      end
 
       def expected?(error)
         @expected_errors.any? { |klass| error.is_a?(klass) }

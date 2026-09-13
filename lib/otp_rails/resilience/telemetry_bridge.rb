@@ -11,6 +11,14 @@ module OtpRails
     # with metadata (metadata wins on a key collision; the §6 contract keeps
     # them disjoint).
     #
+    # ISOLATION: ActiveSupport::Notifications.instrument re-raises exceptions
+    # thrown by app-side AS subscribers. The bridge must never let a buggy app
+    # subscriber propagate back into OtpRails::Telemetry.emit and starve the
+    # bus subscribers registered after it — so the instrument call is rescued
+    # here, independent of any guard the bus itself grows (defense in depth).
+    # Rescued errors are surfaced through on_error (default: Rails.logger,
+    # else Kernel#warn), never re-raised and never silently dropped.
+    #
     # Note the scope: OtpRails::Telemetry is an in-process bus. Events emitted
     # in the supervisor process do not cross into children — the socket
     # protocol is frozen and carries only heartbeats and control messages.
@@ -18,6 +26,11 @@ module OtpRails
     # docs/OPEN_QUESTIONS.md).
     module TelemetryBridge
       class << self
+        # Hook called with (error, event_name) when an AS subscriber raises
+        # through the bridge. Assign a callable to route rescued errors to
+        # your error tracker; nil restores the default (log and continue).
+        attr_accessor :on_error
+
         def installed? = !@subscription.nil?
 
         def install!
@@ -27,10 +40,15 @@ module OtpRails
           @subscription = OtpRails::Telemetry.subscribe do |event|
             name = event[:event].join(".")
             payload = (event[:measurements] || {}).merge(event[:metadata] || {})
-            # instrument (not publish): compatible with every AS subscriber
-            # style — classic blocks, event objects, monotonic_subscribe.
-            # No block, so the event has zero duration.
-            ActiveSupport::Notifications.instrument(name, payload)
+            begin
+              # instrument (not publish): compatible with every AS subscriber
+              # style — classic blocks, event objects, monotonic_subscribe.
+              # No block, so the event has zero duration.
+              ActiveSupport::Notifications.instrument(name, payload)
+            rescue StandardError => e
+              # A raising app subscriber must not break the telemetry bus.
+              handle_error(e, name)
+            end
           end
         end
 
@@ -39,6 +57,24 @@ module OtpRails
 
           OtpRails::Telemetry.unsubscribe(@subscription)
           @subscription = nil
+        end
+
+        private
+
+        def handle_error(error, event_name)
+          if on_error
+            on_error.call(error, event_name)
+          else
+            message = "[otp-rails-resilience] ActiveSupport::Notifications subscriber raised " \
+                      "for #{event_name}: #{error.class}: #{error.message}"
+            if defined?(::Rails) && ::Rails.respond_to?(:logger) && ::Rails.logger
+              ::Rails.logger.error(message)
+            else
+              warn(message)
+            end
+          end
+        rescue StandardError
+          nil # error reporting must never raise back into the bus either
         end
       end
     end

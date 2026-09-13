@@ -58,5 +58,7 @@ Subscriber counting reads `Fanout` ivars (`@string_subscribers` /
 `@other_subscribers`) because ActiveSupport exposes no public subscriber
 enumeration. It is guarded: when the ivars disappear in a future Rails, the
 dimension is skipped (reported as untracked) instead of crashing, and the
-middleware-operations dimension plus raise-on-second-run still stand. A public
-API request upstream would be the clean fix.
+raise-on-second-run check still stands. A public API request upstream would be
+the clean fix. (The middleware-operations dimension originally listed here as
+backup was vestigial on Rails 8.1 — always 0/0 post-boot, with FrozenError
+doing the real catching — and was removed in issue #3.)

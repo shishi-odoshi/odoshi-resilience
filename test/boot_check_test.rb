@@ -34,8 +34,13 @@ class BootCheckTest < Minitest::Test
   def test_fails_loudly_on_class_level_state_drift
     out, status = run_boot_check("DUMMY_NONIDEMPOTENT" => "1")
     refute status.success?, "expected failure, got:\n#{out}"
-    assert_match(/FAIL state drift: /, out)
-    assert_match(/-> /, out)
+    # The unguarded subscribe is caught as subscriber-count drift...
+    assert_match(/FAIL state drift: notification_subscribers \d+ -> \d+/, out)
+    # ...and the unguarded middleware.use via the frozen-stack raise (issue #3:
+    # modern Rails freezes the built middleware stack; there is no counted
+    # middleware dimension).
+    assert_match(/zz_boot_check_fixtures\.rb: FrozenError/, out)
+    refute_match(/middleware_operations/, out, "vestigial dimension removed")
     assert_match(/boot:check FAILED/, out)
   end
 end
