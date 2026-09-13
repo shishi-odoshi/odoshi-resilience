@@ -1,0 +1,7 @@
+/pkg/
+/tmp/
+*.gem
+Gemfile.lock
+.claude/
+test/dummy/log/
+test/dummy/tmp/
