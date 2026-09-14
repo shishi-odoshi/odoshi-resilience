@@ -12,8 +12,8 @@ class ActiveRecordInstrumentationTest < Minitest::Test
     ActiveRecord::Base.establish_connection(
       adapter: "sqlite3", database: ":memory:", pool: 1, checkout_timeout: 0.2
     )
-    OtpRails::Resilience::Instrumentation::ActiveRecord.install!
-    assert OtpRails::Resilience::Instrumentation::ActiveRecord.installed?
+    Odoshi::Resilience::Instrumentation::ActiveRecord.install!
+    assert Odoshi::Resilience::Instrumentation::ActiveRecord.installed?
     @pool = ActiveRecord::Base.connection_pool
 
     @release = Queue.new
@@ -40,12 +40,12 @@ class ActiveRecordInstrumentationTest < Minitest::Test
           assert_raises(ActiveRecord::ConnectionTimeoutError) { @pool.checkout }
         end
 
-        breaker = OtpRails::Resilience.breaker(:active_record)
+        breaker = Odoshi::Resilience.breaker(:active_record)
         assert_equal :open, breaker.state
         assert_includes breaker.expected_errors, ActiveRecord::ConnectionTimeoutError
 
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        assert_raises(OtpRails::Resilience::Breaker::OpenError) { @pool.checkout }
+        assert_raises(Odoshi::Resilience::Breaker::OpenError) { @pool.checkout }
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
         assert_operator elapsed, :<, 0.1,
                         "open circuit fails fast instead of waiting out checkout_timeout"
@@ -54,7 +54,7 @@ class ActiveRecordInstrumentationTest < Minitest::Test
   end
 
   def test_disabled_flag_leaves_checkout_untouched
-    refute OtpRails::Resilience.instrument?(:active_record)
+    refute Odoshi::Resilience.instrument?(:active_record)
     assert_raises(ActiveRecord::ConnectionTimeoutError) { @pool.checkout }
   end
 end

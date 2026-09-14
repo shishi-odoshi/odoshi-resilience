@@ -1,25 +1,25 @@
 # frozen_string_literal: true
 
-module OtpRails
+module Odoshi
   module Resilience
     # DESIGN §9: telemetry has two halves — the supervisor's own minimal event
-    # bus (OtpRails::Telemetry) and this bridge, which re-emits every event
+    # bus (Odoshi::Telemetry) and this bridge, which re-emits every event
     # published on the IN-PROCESS bus as an ActiveSupport::Notifications event.
     #
-    # Names follow the §6 contract joined with dots: [:otp_rails, :child,
-    # :restart] => "otp_rails.child.restart". Payload is measurements merged
+    # Names follow the §6 contract joined with dots: [:odoshi, :child,
+    # :restart] => "odoshi.child.restart". Payload is measurements merged
     # with metadata (metadata wins on a key collision; the §6 contract keeps
     # them disjoint).
     #
     # ISOLATION: ActiveSupport::Notifications.instrument re-raises exceptions
     # thrown by app-side AS subscribers. The bridge must never let a buggy app
-    # subscriber propagate back into OtpRails::Telemetry.emit and starve the
+    # subscriber propagate back into Odoshi::Telemetry.emit and starve the
     # bus subscribers registered after it — so the instrument call is rescued
     # here, independent of any guard the bus itself grows (defense in depth).
     # Rescued errors are surfaced through on_error (default: Rails.logger,
     # else Kernel#warn), never re-raised and never silently dropped.
     #
-    # Note the scope: OtpRails::Telemetry is an in-process bus. Events emitted
+    # Note the scope: Odoshi::Telemetry is an in-process bus. Events emitted
     # in the supervisor process do not cross into children — the socket
     # protocol is frozen and carries only heartbeats and control messages.
     # The bridge covers whatever is emitted in THIS process (see
@@ -37,7 +37,7 @@ module OtpRails
           return @subscription if @subscription
 
           require "active_support/notifications"
-          @subscription = OtpRails::Telemetry.subscribe do |event|
+          @subscription = Odoshi::Telemetry.subscribe do |event|
             name = event[:event].join(".")
             payload = (event[:measurements] || {}).merge(event[:metadata] || {})
             begin
@@ -55,7 +55,7 @@ module OtpRails
         def uninstall!
           return unless @subscription
 
-          OtpRails::Telemetry.unsubscribe(@subscription)
+          Odoshi::Telemetry.unsubscribe(@subscription)
           @subscription = nil
         end
 
@@ -65,7 +65,7 @@ module OtpRails
           if on_error
             on_error.call(error, event_name)
           else
-            message = "[otp-rails-resilience] ActiveSupport::Notifications subscriber raised " \
+            message = "[odoshi-resilience] ActiveSupport::Notifications subscriber raised " \
                       "for #{event_name}: #{error.class}: #{error.message}"
             if defined?(::Rails) && ::Rails.respond_to?(:logger) && ::Rails.logger
               ::Rails.logger.error(message)

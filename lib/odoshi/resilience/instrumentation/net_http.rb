@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module OtpRails
+module Odoshi
   module Resilience
     module Instrumentation
       # Opt-in: wraps Net::HTTP connect (do_start) and request I/O
@@ -18,17 +18,17 @@ module OtpRails
           private
 
           def do_start
-            return super unless OtpRails::Resilience.instrument?(:net_http)
+            return super unless Odoshi::Resilience.instrument?(:net_http)
 
             # count_success: false — a successful CONNECT must not reset the
             # consecutive read-timeout count; only a successful request does.
-            OtpRails::Resilience.http_breaker(address, port).call(count_success: false) { super }
+            Odoshi::Resilience.http_breaker(address, port).call(count_success: false) { super }
           end
 
           def transport_request(req)
-            return super unless OtpRails::Resilience.instrument?(:net_http)
+            return super unless Odoshi::Resilience.instrument?(:net_http)
 
-            OtpRails::Resilience.http_breaker(address, port).call { super }
+            Odoshi::Resilience.http_breaker(address, port).call { super }
           end
         end
 

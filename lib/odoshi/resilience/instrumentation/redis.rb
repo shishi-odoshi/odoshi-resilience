@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module OtpRails
+module Odoshi
   module Resilience
     module Instrumentation
       # SOFT integration (DESIGN §7): activates only when the redis-client gem
@@ -18,21 +18,21 @@ module OtpRails
       module Redis
         module Middleware
           def connect(redis_config)
-            return super unless OtpRails::Resilience.instrument?(:redis)
+            return super unless Odoshi::Resilience.instrument?(:redis)
 
-            OtpRails::Resilience.breaker(:redis).call { super }
+            Odoshi::Resilience.breaker(:redis).call { super }
           end
 
           def call(command, redis_config)
-            return super unless OtpRails::Resilience.instrument?(:redis)
+            return super unless Odoshi::Resilience.instrument?(:redis)
 
-            OtpRails::Resilience.breaker(:redis).call { super }
+            Odoshi::Resilience.breaker(:redis).call { super }
           end
 
           def call_pipelined(commands, redis_config)
-            return super unless OtpRails::Resilience.instrument?(:redis)
+            return super unless Odoshi::Resilience.instrument?(:redis)
 
-            OtpRails::Resilience.breaker(:redis).call { super }
+            Odoshi::Resilience.breaker(:redis).call { super }
           end
         end
 

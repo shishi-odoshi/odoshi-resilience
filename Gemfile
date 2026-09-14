@@ -6,7 +6,7 @@ group :development, :test do
   gem "minitest", "~> 5.25"
   gem "rake", "~> 13.0"
   # json 3.0.x breaks ActiveSupport::JSON.decode on current Rails releases
-  # (seen breaking Solid Queue in any fresh app — see otp-rails-template notes).
+  # (seen breaking Solid Queue in any fresh app — see odoshi-template notes).
   # Pin until Rails ships a fix, then remove.
   gem "json", "< 3.0"
 end

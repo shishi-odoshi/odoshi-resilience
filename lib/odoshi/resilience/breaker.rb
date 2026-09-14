@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module OtpRails
+module Odoshi
   module Resilience
     # Minimal circuit breaker (DESIGN §7). Deliberately boring: consecutive
     # failure counting, three states, no sliding windows, no percentiles.
@@ -29,7 +29,7 @@ module OtpRails
       end
 
       # Pragmatic v0.1 defaults for the wired-in breakers (overridable via
-      # config.otp_rails_resilience.breakers).
+      # config.odoshi_resilience.breakers).
       DEFAULTS_BY_NAME = {
         active_record: { threshold: 3, cool_off: 5.0 },
         http:          { threshold: 5, cool_off: 10.0 },

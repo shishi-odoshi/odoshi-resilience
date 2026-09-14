@@ -2,6 +2,22 @@
 
 ## Unreleased (0.1.0.dev)
 
+Renamed with the ecosystem: **otp-rails-resilience is now odoshi-resilience**
+(otp-rails itself became odoshi 0.3.0):
+
+- Gem `otp-rails-resilience` -> `odoshi-resilience`; module
+  `OtpRails::Resilience` -> `Odoshi::Resilience`; require path
+  `otp_rails/resilience` -> `odoshi/resilience`.
+- Depends on `odoshi ~> 0.3` (was `otp-rails`): module `Odoshi`, env vars
+  `ODOSHI_SOCK`/`ODOSHI_TOKEN` (was `OTP_RAILS_SOCK`/`OTP_RAILS_TOKEN`),
+  telemetry events `[:odoshi, ...]`.
+- Bridged ActiveSupport::Notifications names are now `odoshi.child.restart`
+  style (was `otp_rails.child.restart`); railtie config namespace is
+  `config.odoshi_resilience` (was `config.otp_rails_resilience`).
+- The `Rails.supervisor` API is unchanged (Rails-side naming, unaffected).
+- Never published under the old name; no compatibility shims. Entries below
+  this point keep their original naming for historical accuracy.
+
 Adversarial QA fixes (#1, #2, #3):
 
 - Telemetry bridge isolates raising ActiveSupport::Notifications subscribers:
