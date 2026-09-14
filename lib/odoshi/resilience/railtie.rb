@@ -3,26 +3,26 @@
 require "rails/railtie"
 require "active_support/ordered_options"
 
-module OtpRails
+module Odoshi
   module Resilience
     # Wires the gem into a Rails app:
     #
-    #   config.otp_rails_resilience.enabled                  (true)
-    #   config.otp_rails_resilience.bridge_telemetry         (true)
-    #   config.otp_rails_resilience.define_rails_supervisor  (true)
-    #   config.otp_rails_resilience.instrument_active_record (false, opt-in)
-    #   config.otp_rails_resilience.instrument_net_http      (false, opt-in)
-    #   config.otp_rails_resilience.instrument_redis         (false, opt-in)
-    #   config.otp_rails_resilience.breakers                 ({} — per-name overrides)
+    #   config.odoshi_resilience.enabled                  (true)
+    #   config.odoshi_resilience.bridge_telemetry         (true)
+    #   config.odoshi_resilience.define_rails_supervisor  (true)
+    #   config.odoshi_resilience.instrument_active_record (false, opt-in)
+    #   config.odoshi_resilience.instrument_net_http      (false, opt-in)
+    #   config.odoshi_resilience.instrument_redis         (false, opt-in)
+    #   config.odoshi_resilience.breakers                 ({} — per-name overrides)
     #
     # Runs after load_config_initializers so settings from application.rb,
     # environments/*.rb and config/initializers/*.rb are all honored.
     class Railtie < ::Rails::Railtie
-      config.otp_rails_resilience = ActiveSupport::OrderedOptions.new
+      config.odoshi_resilience = ActiveSupport::OrderedOptions.new
 
-      initializer "otp_rails_resilience.apply", after: :load_config_initializers do |app|
-        cfg = OtpRails::Resilience.config
-        app.config.otp_rails_resilience.each do |key, value|
+      initializer "odoshi_resilience.apply", after: :load_config_initializers do |app|
+        cfg = Odoshi::Resilience.config
+        app.config.odoshi_resilience.each do |key, value|
           setter = "#{key}="
           cfg.public_send(setter, value) if cfg.respond_to?(setter)
         end
@@ -30,7 +30,7 @@ module OtpRails
         next unless cfg.enabled
 
         TelemetryBridge.install! if cfg.bridge_telemetry
-        OtpRails::Resilience.define_rails_supervisor! if cfg.define_rails_supervisor
+        Odoshi::Resilience.define_rails_supervisor! if cfg.define_rails_supervisor
 
         if cfg.instrument_active_record
           ActiveSupport.on_load(:active_record) { Instrumentation::ActiveRecord.install! }

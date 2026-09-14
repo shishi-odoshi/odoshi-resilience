@@ -8,7 +8,7 @@ class SupervisorClientTest < Minitest::Test
 
   def test_rails_supervisor_is_defined_and_memoized
     assert Rails.respond_to?(:supervisor)
-    assert_kind_of OtpRails::Resilience::SupervisorClient, Rails.supervisor
+    assert_kind_of Odoshi::Resilience::SupervisorClient, Rails.supervisor
     assert_same Rails.supervisor, Rails.supervisor
   end
 
@@ -63,15 +63,15 @@ class SupervisorClientTest < Minitest::Test
   def test_restart_raises_unsupervised_without_socket_env
     with_supervision_env(sock: nil, token: nil) do
       refute Rails.supervisor.supervised?
-      err = assert_raises(OtpRails::Resilience::Unsupervised) { Rails.supervisor.restart!(:jobs) }
-      assert_match(/not\s+running under an otp-rails supervisor/, err.message)
+      err = assert_raises(Odoshi::Resilience::Unsupervised) { Rails.supervisor.restart!(:jobs) }
+      assert_match(/not\s+running under an odoshi supervisor/, err.message)
       assert_match(/supervised\?/, err.message)
     end
   end
 
   def test_restart_raises_unsupervised_when_token_missing
     with_supervision_env(sock: "/tmp/nonexistent.sock", token: nil) do
-      assert_raises(OtpRails::Resilience::Unsupervised) { Rails.supervisor.restart!(:jobs) }
+      assert_raises(Odoshi::Resilience::Unsupervised) { Rails.supervisor.restart!(:jobs) }
     end
   end
 end

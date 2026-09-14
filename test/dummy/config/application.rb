@@ -4,7 +4,7 @@
 # the notification bridge, boot:check, and the breakers. No `rails new`.
 require "rails"
 require "action_controller/railtie"
-require "otp_rails/resilience"
+require "odoshi/resilience"
 
 module Dummy
   class Application < Rails::Application

@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-module OtpRails
+module Odoshi
   module Resilience
     # Runtime configuration. In a Rails app set these through the railtie:
     #
-    #   config.otp_rails_resilience.instrument_net_http = true
-    #   config.otp_rails_resilience.breakers = { http: { threshold: 3 } }
+    #   config.odoshi_resilience.instrument_net_http = true
+    #   config.odoshi_resilience.breakers = { http: { threshold: 3 } }
     #
     # Everything is disable-able; `enabled = false` turns the whole gem off.
     # The instrument_* switches are checked at call time, so flipping them at

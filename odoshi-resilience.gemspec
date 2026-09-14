@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
-require_relative "lib/otp_rails/resilience/version"
+require_relative "lib/odoshi/resilience/version"
 
 Gem::Specification.new do |s|
-  s.name        = "otp-rails-resilience"
-  s.version     = OtpRails::Resilience::VERSION
-  s.summary     = "Crash-only conventions and circuit breakers for otp-rails supervised apps"
-  s.description = "The Rails-side companion to otp-rails: a railtie that bridges supervisor " \
+  s.name        = "odoshi-resilience"
+  s.version     = Odoshi::Resilience::VERSION
+  s.summary     = "Crash-only conventions and circuit breakers for odoshi supervised apps"
+  s.description = "The Rails-side companion to odoshi: a railtie that bridges supervisor " \
                   "telemetry into ActiveSupport::Notifications, Rails.supervisor.restart! over " \
                   "the supervision socket, fail-open circuit breakers for ActiveRecord / " \
                   "Net::HTTP / Redis, and a bin/rails boot:check idempotency task."
   s.authors     = ["timimsms"]
   s.license     = "MIT"
-  s.homepage    = "https://github.com/shishi-odoshi/otp-rails-resilience"
+  s.homepage    = "https://github.com/shishi-odoshi/odoshi-resilience"
   s.metadata    = {
     "homepage_uri"    => s.homepage,
     "source_code_uri" => s.homepage,
@@ -27,5 +27,5 @@ Gem::Specification.new do |s|
   # the Redis integration is soft (activates only when a redis client is present).
   s.add_dependency "railties", ">= 7.1"
   s.add_dependency "activesupport", ">= 7.1"
-  s.add_dependency "otp-rails", "~> 0.1", ">= 0.1.1"
+  s.add_dependency "odoshi", "~> 0.3"
 end

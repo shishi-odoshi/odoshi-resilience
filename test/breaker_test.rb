@@ -10,7 +10,7 @@ class BreakerTest < Minitest::Test
 
   def breaker(**opts)
     defaults = { threshold: 3, cool_off: 60.0, expected_errors: [Boom] }
-    OtpRails::Resilience::Breaker.new(:test, **defaults.merge(opts))
+    Odoshi::Resilience::Breaker.new(:test, **defaults.merge(opts))
   end
 
   def trip(b, times)
@@ -28,7 +28,7 @@ class BreakerTest < Minitest::Test
     assert_equal :open, b.state
 
     calls = 0
-    err = assert_raises(OtpRails::Resilience::Breaker::OpenError) { b.call { calls += 1 } }
+    err = assert_raises(Odoshi::Resilience::Breaker::OpenError) { b.call { calls += 1 } }
     assert_equal 0, calls, "open circuit must not invoke the block"
     assert_equal :test, err.breaker_name
   end
@@ -91,7 +91,7 @@ class BreakerTest < Minitest::Test
             sleep 2.0 # keep the trial in flight while every other thread attempts
             :ok
           end
-        rescue OtpRails::Resilience::Breaker::OpenError
+        rescue Odoshi::Resilience::Breaker::OpenError
           open_mutex.synchronize { open_errors += 1 }
         end
       end
@@ -136,7 +136,7 @@ class BreakerTest < Minitest::Test
     def set(_key, _value) = raise(IOError, "storage backend down")
   end
 
-  class WriteBrokenStorage < OtpRails::Resilience::Breaker::MemoryStorage
+  class WriteBrokenStorage < Odoshi::Resilience::Breaker::MemoryStorage
     def set(_key, _value) = raise(IOError, "storage writes down")
   end
 
@@ -145,7 +145,7 @@ class BreakerTest < Minitest::Test
     assert_equal :open, b.state
 
     calls = 0
-    assert_raises(OtpRails::Resilience::Breaker::OpenError) { b.call { calls += 1 } }
+    assert_raises(Odoshi::Resilience::Breaker::OpenError) { b.call { calls += 1 } }
     assert_equal 0, calls
   end
 
@@ -155,11 +155,11 @@ class BreakerTest < Minitest::Test
     assert_raises(Boom) { b.call { raise Boom } }
     # Fail-open: the broken bookkeeping opens the circuit.
     assert_equal :open, b.state
-    assert_raises(OtpRails::Resilience::Breaker::OpenError) { b.call { :never } }
+    assert_raises(Odoshi::Resilience::Breaker::OpenError) { b.call { :never } }
   end
 
   def test_storage_failure_heals_after_cool_off
-    storage = OtpRails::Resilience::Breaker::MemoryStorage.new
+    storage = Odoshi::Resilience::Breaker::MemoryStorage.new
     flaky = Object.new
     flaky.define_singleton_method(:broken=) { |v| @broken = v }
     flaky.define_singleton_method(:get) { |k| @broken ? raise(IOError) : storage.get(k) }
@@ -178,24 +178,24 @@ class BreakerTest < Minitest::Test
   # -- registry / wrapper API -------------------------------------------------
 
   def test_registry_memoizes_and_wrapper_runs_block
-    OtpRails::Resilience.reset_breakers!
-    a = OtpRails::Resilience.breaker(:reg_test)
-    assert_same a, OtpRails::Resilience.breaker(:reg_test)
+    Odoshi::Resilience.reset_breakers!
+    a = Odoshi::Resilience.breaker(:reg_test)
+    assert_same a, Odoshi::Resilience.breaker(:reg_test)
     assert_equal 7, Rails.supervisor.breaker(:reg_test) { 7 }
   ensure
-    OtpRails::Resilience.reset_breakers!
+    Odoshi::Resilience.reset_breakers!
   end
 
   def test_registry_applies_config_overrides_and_named_defaults
     with_breaker_config(redis: { threshold: 1, cool_off: 60 }) do
-      b = OtpRails::Resilience.breaker(:redis)
+      b = Odoshi::Resilience.breaker(:redis)
       assert_equal 1, b.threshold
       assert_equal 60.0, b.cool_off
 
-      http = OtpRails::Resilience.breaker(:http)
+      http = Odoshi::Resilience.breaker(:http)
       assert_equal 5, http.threshold, "DEFAULTS_BY_NAME applies when unconfigured"
 
-      per_host = OtpRails::Resilience.http_breaker("example.test", 80)
+      per_host = Odoshi::Resilience.http_breaker("example.test", 80)
       assert_equal :"http.example.test:80", per_host.name
       assert_equal 5, per_host.threshold, "per-host breakers derive from :http defaults"
     end

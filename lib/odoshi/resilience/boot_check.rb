@@ -2,7 +2,7 @@
 
 require "json"
 
-module OtpRails
+module Odoshi
   module Resilience
     # bin/rails boot:check — DESIGN §7: "boot must be idempotent".
     #

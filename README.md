@@ -1,10 +1,10 @@
-# otp-rails-resilience
+# odoshi-resilience
 
 Crash-only conventions for Rails apps supervised by
-[otp-rails](https://github.com/shishi-odoshi/otp-rails) — the Rails-side half
+[odoshi](https://github.com/shishi-odoshi/odoshi) — the Rails-side half
 of the design's slim-supervisor split (DESIGN §7/§9).
 
-The otp-rails supervisor is a separate process that never loads Rails. This
+The odoshi supervisor is a separate process that never loads Rails. This
 gem runs **inside each Rails child** and provides the four things the
 supervisor deliberately cannot:
 
@@ -23,26 +23,26 @@ crash-only world every boot is a re-boot.
 
 ```ruby
 # Gemfile
-gem "otp-rails-resilience", require: "otp_rails/resilience"
+gem "odoshi-resilience", require: "odoshi/resilience"
 ```
 
 Requires Ruby >= 3.2 and Rails >= 7.1. Runtime dependencies are exactly
-`railties`, `activesupport`, and `otp-rails` — the Redis integration is soft
+`railties`, `activesupport`, and `odoshi` — the Redis integration is soft
 and activates only when a redis client is already present.
 
 ## 1. Telemetry bridge
 
-The supervisor's event bus (`OtpRails::Telemetry`, DESIGN §6) is re-emitted as
+The supervisor's event bus (`Odoshi::Telemetry`, DESIGN §6) is re-emitted as
 `ActiveSupport::Notifications` events. Names are the §6 contract joined with
 dots; payload is measurements merged with metadata:
 
 ```
-otp_rails.supervisor.start / .stop / .escalate
-otp_rails.child.spawn / .healthy / .degraded / .exit / .restart / .drain / .kill
+odoshi.supervisor.start / .stop / .escalate
+odoshi.child.spawn / .healthy / .degraded / .exit / .restart / .drain / .kill
 ```
 
 ```ruby
-ActiveSupport::Notifications.subscribe("otp_rails.child.restart") do |*, payload|
+ActiveSupport::Notifications.subscribe("odoshi.child.restart") do |*, payload|
   StatsD.increment("supervisor.restarts", tags: ["child:#{payload[:id]}"])
 end
 ```
@@ -51,13 +51,13 @@ Or the convenience API, which yields one normalized hash:
 
 ```ruby
 Rails.supervisor.subscribe do |event|
-  # { name: "otp_rails.child.restart",
-  #   event: [:otp_rails, :child, :restart],
+  # { name: "odoshi.child.restart",
+  #   event: [:odoshi, :child, :restart],
   #   payload: { id: :jobs, attempt: 1, backoff_ms: 1000, strategy: :one_for_one } }
 end
 ```
 
-Scope note: `OtpRails::Telemetry` is an in-process bus, and the socket
+Scope note: `Odoshi::Telemetry` is an in-process bus, and the socket
 protocol between supervisor and children is frozen (heartbeats and control
 messages only) — so the bridge covers events emitted in *this* process. For
 the supervisor's own event stream, use its JSON-lines exporter. See
@@ -70,18 +70,18 @@ Rails.supervisor.restart!(:jobs)   # => true
 ```
 
 Sends exactly one NDJSON line over the Unix socket the supervisor exported via
-`OTP_RAILS_SOCK`, authenticated with the per-boot `OTP_RAILS_TOKEN`:
+`ODOSHI_SOCK`, authenticated with the per-boot `ODOSHI_TOKEN`:
 
 ```json
 {"cmd":"restart","id":"jobs","token":"<per-boot token>"}
 ```
 
-That wire protocol is **frozen** (otp-rails hard rule 4) — this gem adds no
+That wire protocol is **frozen** (odoshi hard rule 4) — this gem adds no
 extensions. The socket is mode 0600 and the token is per-boot; anything that
 can write to it can restart workers, which is the point and the boundary.
 
 When the process is not running under a supervisor, `restart!` **raises
-`OtpRails::Resilience::Unsupervised`** rather than silently returning — a
+`Odoshi::Resilience::Unsupervised`** rather than silently returning — a
 remediation that silently does not happen is worse than a loud error. Guard
 call sites that legitimately run both ways:
 
@@ -91,7 +91,7 @@ Rails.supervisor.restart!(:jobs) if Rails.supervisor.supervised?
 
 **Runbook note — where to call it from.** Remediation calls must originate
 *inside* the supervision tree: only children spawned by the supervisor inherit
-`OTP_RAILS_SOCK` / `OTP_RAILS_TOKEN`. A `bin/rails runner` one-liner, a cron
+`ODOSHI_SOCK` / `ODOSHI_TOKEN`. A `bin/rails runner` one-liner, a cron
 job, or a console started outside the tree raises `Unsupervised` **by
 design** — it has no socket and no per-boot token, so it cannot authenticate.
 The reference pattern (used by the integration harness) is to route the
@@ -122,7 +122,7 @@ Rails.supervisor.breaker(:payments, threshold: 3, cool_off: 15,
                          expected_errors: [Faraday::TimeoutError]) { charge! }
 ```
 
-An open circuit raises `OtpRails::Resilience::Breaker::OpenError` without
+An open circuit raises `Odoshi::Resilience::Breaker::OpenError` without
 invoking the block. Options apply on first use of a name; after that the
 registry memoizes.
 
@@ -137,7 +137,7 @@ registry memoizes.
 Override per name:
 
 ```ruby
-config.otp_rails_resilience.breakers = { http: { threshold: 3, cool_off: 30 } }
+config.odoshi_resilience.breakers = { http: { threshold: 3, cool_off: 30 } }
 ```
 
 ### Opt-in auto-instrumentation
@@ -146,9 +146,9 @@ Off by default; each is a one-line opt-in and can be flipped at runtime
 (patches check the switch on every call):
 
 ```ruby
-config.otp_rails_resilience.instrument_active_record = true # pool checkout timeouts
-config.otp_rails_resilience.instrument_net_http      = true # connect + read, per host:port
-config.otp_rails_resilience.instrument_redis         = true # soft: only if RedisClient is loaded
+config.odoshi_resilience.instrument_active_record = true # pool checkout timeouts
+config.odoshi_resilience.instrument_net_http      = true # connect + read, per host:port
+config.odoshi_resilience.instrument_redis         = true # soft: only if RedisClient is loaded
 ```
 
 - **ActiveRecord** — wraps connection checkout; repeated pool-exhaustion
@@ -206,13 +206,13 @@ Platforms without `Process.fork` skip the check (reported, exit 0).
 ## Configuration reference
 
 ```ruby
-config.otp_rails_resilience.enabled                  = true  # master switch
-config.otp_rails_resilience.bridge_telemetry         = true
-config.otp_rails_resilience.define_rails_supervisor  = true
-config.otp_rails_resilience.instrument_active_record = false
-config.otp_rails_resilience.instrument_net_http      = false
-config.otp_rails_resilience.instrument_redis         = false
-config.otp_rails_resilience.breakers                 = {}    # per-name overrides
+config.odoshi_resilience.enabled                  = true  # master switch
+config.odoshi_resilience.bridge_telemetry         = true
+config.odoshi_resilience.define_rails_supervisor  = true
+config.odoshi_resilience.instrument_active_record = false
+config.odoshi_resilience.instrument_net_http      = false
+config.odoshi_resilience.instrument_redis         = false
+config.odoshi_resilience.breakers                 = {}    # per-name overrides
 ```
 
 ## Development

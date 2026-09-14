@@ -36,7 +36,7 @@ class BreakerTcpTest < Minitest::Test
   end
 
   def test_breaker_opens_on_real_read_timeouts_then_fails_fast
-    b = OtpRails::Resilience::Breaker.new(
+    b = Odoshi::Resilience::Breaker.new(
       :tcp_test, threshold: 2, cool_off: 60.0,
       expected_errors: [Net::OpenTimeout, Net::ReadTimeout]
     )
@@ -48,7 +48,7 @@ class BreakerTcpTest < Minitest::Test
     end
 
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    assert_raises(OtpRails::Resilience::Breaker::OpenError) do
+    assert_raises(Odoshi::Resilience::Breaker::OpenError) do
       b.call { silent_http.start { |h| h.get("/") } }
     end
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
@@ -56,8 +56,8 @@ class BreakerTcpTest < Minitest::Test
   end
 
   def test_net_http_auto_instrumentation_trips_per_host_breaker
-    OtpRails::Resilience::Instrumentation::NetHTTP.install!
-    assert OtpRails::Resilience::Instrumentation::NetHTTP.installed?
+    Odoshi::Resilience::Instrumentation::NetHTTP.install!
+    assert Odoshi::Resilience::Instrumentation::NetHTTP.installed?
 
     with_breaker_config(http: { threshold: 2, cool_off: 60 }) do
       with_instrumentation(:net_http) do
@@ -66,7 +66,7 @@ class BreakerTcpTest < Minitest::Test
         end
 
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        assert_raises(OtpRails::Resilience::Breaker::OpenError) do
+        assert_raises(Odoshi::Resilience::Breaker::OpenError) do
           silent_http.start { |h| h.get("/") }
         end
         elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
@@ -75,8 +75,8 @@ class BreakerTcpTest < Minitest::Test
         # Different port => different breaker => circuit still closed there.
         other = TCPServer.new("127.0.0.1", 0)
         begin
-          per_host = OtpRails::Resilience.http_breaker("127.0.0.1", @port)
-          other_breaker = OtpRails::Resilience.http_breaker("127.0.0.1", other.addr[1])
+          per_host = Odoshi::Resilience.http_breaker("127.0.0.1", @port)
+          other_breaker = Odoshi::Resilience.http_breaker("127.0.0.1", other.addr[1])
           assert_equal :open, per_host.state
           assert_equal :closed, other_breaker.state
         ensure
@@ -87,8 +87,8 @@ class BreakerTcpTest < Minitest::Test
   end
 
   def test_instrumentation_disabled_by_default_leaves_net_http_alone
-    OtpRails::Resilience::Instrumentation::NetHTTP.install!
-    refute OtpRails::Resilience.instrument?(:net_http)
+    Odoshi::Resilience::Instrumentation::NetHTTP.install!
+    refute Odoshi::Resilience.instrument?(:net_http)
     assert_raises(Net::ReadTimeout) { silent_http.start { |h| h.get("/") } }
   end
 end

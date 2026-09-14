@@ -1,26 +1,26 @@
 # frozen_string_literal: true
 
-# otp-rails-resilience — the Rails-side companion to the slim otp-rails
+# odoshi-resilience — the Rails-side companion to the slim odoshi
 # supervisor (DESIGN §7 crash-only conventions, §9 slim-supervisor split).
 #
 # The supervisor process never loads Rails; this gem runs INSIDE each Rails
 # child and provides:
-#   1. a railtie bridging OtpRails::Telemetry into ActiveSupport::Notifications
+#   1. a railtie bridging Odoshi::Telemetry into ActiveSupport::Notifications
 #   2. Rails.supervisor.restart!(:jobs) over the supervision socket
 #   3. fail-open circuit breakers with pragmatic AR / Net::HTTP / Redis defaults
 #   4. bin/rails boot:check — boot idempotency verification
 #
-# Deliberately requires only otp_rails/telemetry from the otp-rails gem, not
+# Deliberately requires only odoshi/telemetry from the odoshi gem, not
 # the whole supervisor — children stay featherweight (same philosophy as
-# otp_rails/heartbeat).
-require "otp_rails/telemetry"
+# odoshi/heartbeat).
+require "odoshi/telemetry"
 
-module OtpRails
+module Odoshi
   module Resilience
     class Error < StandardError; end
 
     # Raised by Rails.supervisor.restart! when the process is not running
-    # under an otp-rails supervisor (no OTP_RAILS_SOCK / OTP_RAILS_TOKEN).
+    # under an odoshi supervisor (no ODOSHI_SOCK / ODOSHI_TOKEN).
     # Raising (rather than silently returning false) is the conservative
     # choice: restart! is a remediation the caller depends on, and a silent
     # no-op would hide that the remediation never happened.
@@ -38,7 +38,7 @@ require_relative "resilience/instrumentation/net_http"
 require_relative "resilience/instrumentation/redis"
 require_relative "resilience/boot_check"
 
-module OtpRails
+module Odoshi
   module Resilience
     @breakers = {}
     @registry_mutex = Mutex.new
@@ -56,7 +56,7 @@ module OtpRails
       def define_rails_supervisor!
         return false unless defined?(::Rails)
         return false if ::Rails.respond_to?(:supervisor)
-        ::Rails.define_singleton_method(:supervisor) { OtpRails::Resilience.supervisor }
+        ::Rails.define_singleton_method(:supervisor) { Odoshi::Resilience.supervisor }
         true
       end
 

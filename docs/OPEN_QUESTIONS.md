@@ -6,11 +6,11 @@ conservative pick that shipped, and what would change the answer. None blocks
 
 ## 1. `restart!` when unsupervised: raise vs. no-op false
 
-- (a) **Raise `OtpRails::Resilience::Unsupervised` (shipped).** restart! is a
+- (a) **Raise `Odoshi::Resilience::Unsupervised` (shipped).** restart! is a
   remediation runbooks depend on (DESIGN §7); a remediation that silently does
   not happen is worse than a loud error. Callers that legitimately run both
   supervised and unsupervised guard with `Rails.supervisor.supervised?`.
-- (b) Return `false` — symmetric with `OtpRails::Heartbeat`, which no-ops when
+- (b) Return `false` — symmetric with `Odoshi::Heartbeat`, which no-ops when
   unsupervised. Rejected: heartbeats are passive telemetry, restart! is an
   action; the failure modes are not symmetric.
 
@@ -33,9 +33,9 @@ boot-twice behavior end to end.
 
 ## 3. Telemetry bridge is in-process only
 
-`OtpRails::Telemetry` is an in-process bus; supervisor-process events do not
+`Odoshi::Telemetry` is an in-process bus; supervisor-process events do not
 cross into children. The frozen socket protocol carries only heartbeats and
-control messages (otp-rails hard rule 4), so the bridge re-emits whatever is
+control messages (odoshi hard rule 4), so the bridge re-emits whatever is
 emitted in the child's own process. Forwarding supervisor events to children
 would require a contract extension (a DESIGN §5/§6 edit) — explicitly not done
 here. If child-side visibility of supervisor events is wanted, the supported
